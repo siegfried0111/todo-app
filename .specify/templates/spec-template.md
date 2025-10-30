@@ -11,13 +11,18 @@
   IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
   Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
   you should still have a viable MVP (Minimum Viable Product) that delivers value.
-  
+
   Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
   Think of each story as a standalone slice of functionality that can be:
   - Developed independently
   - Tested independently
   - Deployed independently
   - Demonstrated to users independently
+
+  TDD REQUIREMENT (Constitution Principle I):
+  - Acceptance scenarios below MUST be specific enough to write tests BEFORE implementation
+  - Each scenario will become a failing test first (Red), then implementation (Green), then refactor
+  - Vague scenarios block TDD - ensure Given/When/Then are concrete and measurable
 -->
 
 ### User Story 1 - [Brief Title] (Priority: P1)

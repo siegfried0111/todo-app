@@ -31,7 +31,15 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Verify this feature complies with `.specify/memory/constitution.md`:
+
+- [ ] **TDD Readiness**: Acceptance criteria in spec.md are specific enough to write tests first
+- [ ] **Simplicity**: No speculative features or premature abstraction planned
+- [ ] **Readability**: Design favors clear naming and single-responsibility modules
+- [ ] **Maintainability**: Clear module boundaries and loose coupling in architecture
+- [ ] **Quality Gates**: Linting, testing, and review processes defined
+
+*If any principle is violated, document justification in Complexity Tracking section below*
 
 ## Project Structure
 
