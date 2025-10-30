@@ -4,8 +4,8 @@ This directory contains the API contract specifications for the Todo App.
 
 ## Files
 
-- **openapi.yaml**: OpenAPI 3.1.0 specification for the REST API
-- **api-types.ts**: TypeScript types derived from the OpenAPI spec
+- **openapi.yaml**: OpenAPI 3.1.0 specification for the REST API (backend reference)
+- **api-types.ts**: Zod schemas and inferred TypeScript types (frontend source of truth)
 
 ## OpenAPI Specification
 
@@ -27,29 +27,72 @@ The `openapi.yaml` file defines:
 | DELETE | `/todos/{todo_id}` | Delete a todo |
 | PATCH | `/todos/{todo_id}/complete` | Mark todo as completed/in-progress |
 
-## TypeScript Types
+## Zod Schemas & TypeScript Types
 
-The `api-types.ts` file provides TypeScript interfaces for:
-- Request payloads (TodoCreate, TodoUpdate, TodoComplete)
-- Response objects (TodoResponse, TodoListResponse)
-- Error responses (ErrorResponse, ValidationErrorResponse)
-- Query parameters (ListTodosParams)
-- TanStack Query types (mutation/query types)
+The `api-types.ts` file uses a **Zod-first approach** for maximum type safety:
+
+### Zod Schemas (Runtime Validation)
+- Request schemas: `TodoCreateSchema`, `TodoUpdateSchema`, `TodoCompleteSchema`
+- Response schemas: `TodoResponseSchema`, `TodoListResponseSchema`
+- Error schemas: `ErrorResponseSchema`, `ValidationErrorResponseSchema`
+- Query params: `ListTodosParamsSchema`
+
+### TypeScript Types (Inferred from Zod)
+- All types are inferred using `z.infer<typeof Schema>`
+- Single source of truth prevents type/schema drift
+- Runtime validation ensures data integrity
 
 ### Usage in Frontend
 
+**Form Validation with React Hook Form:**
 ```typescript
-import { TodoResponse, TodoCreate } from './contracts/api-types';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { TodoCreateSchema, type TodoCreate } from './contracts/api-types';
 
-// Creating a todo
-const newTodo: TodoCreate = {
-  title: "Buy groceries",
-  content: "Milk, eggs, bread"
-};
+function TodoForm() {
+  const { register, handleSubmit, formState: { errors } } = useForm<TodoCreate>({
+    resolver: zodResolver(TodoCreateSchema), // Automatic validation
+  });
 
-// Handling response
-const todo: TodoResponse = await createTodo(newTodo);
+  const onSubmit = (data: TodoCreate) => {
+    // data is validated and transformed (title trimmed)
+    createTodo(data);
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <input {...register('title')} />
+      {errors.title && <span>{errors.title.message}</span>}
+      <button type="submit">Create</button>
+    </form>
+  );
+}
 ```
+
+**API Response Validation with TanStack Query:**
+```typescript
+import { useQuery } from '@tanstack/react-query';
+import { TodoListResponseSchema } from './contracts/api-types';
+
+function useTodos() {
+  return useQuery({
+    queryKey: ['todos'],
+    queryFn: async () => {
+      const response = await axios.get('/api/todos');
+      // Validate at runtime - throws if invalid
+      return TodoListResponseSchema.parse(response.data);
+    },
+  });
+}
+```
+
+**Benefits of Zod-First:**
+- ✅ Runtime validation catches API contract violations
+- ✅ Type safety at both compile-time and runtime
+- ✅ Automatic form validation with React Hook Form
+- ✅ Transform data (e.g., trim whitespace) during validation
+- ✅ Single source of truth (no separate types and validators)
 
 ## Validation Rules
 
@@ -112,16 +155,39 @@ You can view and interact with the API specification using:
 2. **ReDoc**: Visit `http://localhost:8000/redoc` when the backend is running
 3. **VS Code**: Use the "OpenAPI (Swagger) Editor" extension
 
-### Generating Types (Future)
+### Zod Schema Validation
 
-For production, consider auto-generating TypeScript types from the OpenAPI spec:
+The Zod schemas provide automatic runtime validation:
 
-```bash
-# Using openapi-typescript
-npx openapi-typescript openapi.yaml -o api-types.ts
+```typescript
+import { TodoCreateSchema, safeParseApiResponse } from './api-types';
+
+// Validate form data before sending
+const result = TodoCreateSchema.safeParse(formData);
+if (!result.success) {
+  console.error('Validation errors:', result.error.errors);
+}
+
+// Validate API responses
+const response = await axios.get('/api/todos');
+const parsed = safeParseApiResponse.todoList(response.data);
+if (parsed.success) {
+  // Type-safe data
+  console.log(parsed.data.todos);
+} else {
+  // Handle invalid response
+  console.error('Invalid API response:', parsed.error);
+}
 ```
 
-This ensures types stay in sync with the specification.
+### No Code Generation Needed
+
+Unlike OpenAPI type generation approaches, Zod schemas:
+- Are hand-written once and maintained as the source of truth
+- Provide both compile-time types AND runtime validation
+- Work seamlessly with React Hook Form
+- Catch API contract violations at runtime, not just compile time
+- No build step or code generation required
 
 ## Testing the API
 
@@ -168,10 +234,39 @@ http PATCH http://localhost:8000/api/todos/1/complete is_completed:=true
 
 ## Contract Testing
 
-The OpenAPI specification serves as a contract between frontend and backend:
+The API contract is enforced at multiple levels:
 
-1. **Backend**: FastAPI auto-generates OpenAPI spec from Pydantic models
-2. **Frontend**: Uses types derived from the spec for type safety
-3. **Testing**: Use contract testing tools (e.g., Pact, Dredd) to verify compliance
+### Backend (Pydantic)
+- FastAPI auto-generates OpenAPI spec from Pydantic models
+- Request/response validation at runtime
+- Type hints for IDE support
 
-This ensures both sides agree on the API structure and prevents integration issues.
+### Frontend (Zod)
+- Zod schemas validate API responses at runtime
+- Catch contract violations immediately (not just at compile time)
+- Type inference ensures TypeScript types match schemas
+
+### Contract Alignment
+1. **Design Time**: OpenAPI spec (`openapi.yaml`) defines the contract
+2. **Backend**: Pydantic schemas implement the contract
+3. **Frontend**: Zod schemas mirror the contract with runtime validation
+
+### Runtime Contract Verification
+
+```typescript
+// Frontend automatically validates API responses
+const { data } = useQuery({
+  queryKey: ['todos'],
+  queryFn: async () => {
+    const response = await axios.get('/api/todos');
+    // This will throw if backend returns unexpected data
+    return TodoListResponseSchema.parse(response.data);
+  },
+});
+```
+
+**Benefits:**
+- Integration issues caught immediately in development
+- No silent data corruption from API changes
+- Clear error messages when contracts are violated
+- Both frontend and backend enforce the same contract

@@ -73,30 +73,73 @@ This document captures the technical research and architectural decisions for th
 
 ---
 
-## Decision 4: Form Management & Validation
+## Decision 4: Form Management & Validation (Zod-First Approach)
 
-**Decision**: React Hook Form + Zod
+**Decision**: React Hook Form + Zod + Runtime API Validation
 
 **Rationale**:
 - **React Hook Form**: Minimal re-renders (uncontrolled inputs), small bundle size (8.5KB), excellent performance
-- **Zod**: TypeScript-first schema validation, type inference eliminates duplicate type definitions
-- Tight integration between RHF and Zod via `@hookform/resolvers`
+- **Zod-First**: Schemas as single source of truth for both types and validation
+- **Runtime Validation**: Zod validates API responses, catching contract violations immediately
+- **Type Inference**: TypeScript types automatically derived from Zod schemas (no duplication)
+- Tight integration between RHF and Zod via `@hookform/resolvers/zod`
 
 **Alternatives Considered**:
 - Formik: More re-renders, larger bundle, slower performance
 - Yup: Not TypeScript-first, requires separate type definitions
+- OpenAPI type generation: No runtime validation, compile-time only
+
+**Why Zod-First Wins**:
+1. **Single Source of Truth**: Define schema once, get types + validation + transformations
+2. **Runtime Safety**: Catch API changes/violations at runtime, not just compile time
+3. **Form Integration**: `zodResolver` seamlessly integrates with React Hook Form
+4. **Transformations**: `.transform()` allows data normalization (e.g., trim whitespace)
+5. **Better DX**: Clear error messages, excellent TypeScript inference
 
 **Best Practices**:
 ```typescript
-// Define schema once, infer types
-const todoSchema = z.object({
-  title: z.string().min(1, "Title required").max(200),
-  content: z.string().max(10000)
-})
-type TodoFormData = z.infer<typeof todoSchema>
+// contracts/api-types.ts - Define schemas once
+export const TodoCreateSchema = z.object({
+  title: z
+    .string()
+    .min(1, "Title is required")
+    .max(200, "Title must be 200 characters or less")
+    .refine(val => val.trim().length > 0, "Title cannot be only whitespace")
+    .transform(val => val.trim()), // Normalize data
+  content: z.string().max(10000).optional().default('')
+});
+
+// Infer TypeScript type from schema
+export type TodoCreate = z.infer<typeof TodoCreateSchema>;
+
+// Form component - Use schema for validation
+import { zodResolver } from '@hookform/resolvers/zod';
+
+function TodoForm() {
+  const { register, handleSubmit, formState: { errors } } = useForm<TodoCreate>({
+    resolver: zodResolver(TodoCreateSchema),
+    mode: 'onBlur' // Validate on blur
+  });
+
+  const onSubmit = (data: TodoCreate) => {
+    // data is validated AND transformed (title trimmed)
+    createTodo(data);
+  };
+}
+
+// API service - Validate responses at runtime
+async function createTodo(data: TodoCreate) {
+  const response = await axios.post('/api/todos', data);
+  // Validate response matches contract
+  return TodoResponseSchema.parse(response.data);
+}
 ```
-- Use `mode: 'onBlur'` for validation (avoid aggressive onSubmit-only)
+
+**Additional Configuration**:
+- Use `mode: 'onBlur'` for validation (balance UX vs validation timing)
 - Set `shouldUnregister: false` to preserve form data during unmount
+- Use `.safeParse()` for graceful error handling instead of throwing
+- Validate ALL API responses to catch backend contract violations early
 
 ---
 

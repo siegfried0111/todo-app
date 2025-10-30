@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(uv init:*)",
+      "Bash(uv add:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(uv run:*)",
+      "Bash(npm run type-check:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
